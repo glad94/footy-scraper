@@ -4,7 +4,7 @@ Created on Wed Aug  8 17:31:10 2018
 
 #Updated on Wed Jan 9 2019 
 
-@author: Gerald Lim
+@author: Gerald
 
 Simple web-scraper from Transfermarkt for any team's player minutes for a selected season 
 in any competition or all competitions 
