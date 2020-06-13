@@ -2,9 +2,23 @@
 """
 Created on Wed Aug  8 17:31:10 2018
 
-#Updated on Wed Jan 9 2019 
+# Updated on Wed Jan 9 2019 
 
-@author: Gerald
+# Updated again on Fri 15/5/2020
+
+--------------------------------------
+Known Issues:
+    
+    - Norwich and Newcastle's 17 Aug 2019 match has been wrongly listed as 16 Aug on their team page, but not indiv player pages
+    - Bundesliga players have an additional column "Rating" for their league matches only (as far as 11/12). So the row length check to see if 
+    if they were in the match squad or not should be 18 instead of the usual 17. 
+    - Lines ~114-115, for 'playerTeam' above, for some reason for Bundesliga it fetches e.g. 'Bayern Munich ' 
+    hence it will never match with the 'team' arg and for loop ends here for each player. Need to [:-1] the string to match
+
+    - Amdy Faye Stoke 09/10 data is messed up on the site 
+
+
+@author: Gerald Lim
 
 Simple web-scraper from Transfermarkt for any team's player minutes for a selected season 
 in any competition or all competitions 
@@ -36,6 +50,19 @@ def scrapePlayer(pName, link, comp, team, ms, sI, sO, compNames, gN):
                 The competition to scrap data from {"Premier League", "UEFA Champions League", "FA Cup", etc.} *Gotta be precise with this 
             team: str
                 Team of interest {"Man Utd", "Arsenal", etc.}
+            link: str
+                Link/URL to the player's detailed Transfermarkt stats page 
+            ms: list 
+                Initial empty list (per player) to store their minutes played per list index
+            sI: list
+                Initial empty list (per player) to store their minute subbed in per list index
+            sO: list
+                Initial empty list (per player) to store their minute subbed out per list index
+            compNames:
+                
+            gN: list
+                
+            
     '''
     #Load the player perfomance data page 
     page = link
@@ -58,7 +85,6 @@ def scrapePlayer(pName, link, comp, team, ms, sI, sO, compNames, gN):
     if comp != "all":
         
         minutes = np.zeros_like(ms).tolist()
-        #print (minutes)
         subIn = np.zeros_like(sI).tolist()
         subOut = np.zeros_like(sO).tolist() 
         
@@ -70,41 +96,57 @@ def scrapePlayer(pName, link, comp, team, ms, sI, sO, compNames, gN):
                 comp_index = allcomps.index(i)
         #print (comp_index)
         
-        results_comp = pageSoup.find_all(class_="responsive-table")[comp_index+1]
-        #print (results_comp)
-        #match = results_comp.find_all('tr',class_='','bg_rot_20','bg_gelb_20')
-        
-        #This re.compile method magically works somehow
-        match = results_comp.find_all("tr", { "class" : re.compile(r"^(|bg_rot_20|bg_gelb_20)$") })
-        
-        #print (match[12].get_text(strip=True))
-        #print (len(match))
-        
-        for j in range(0, len(match)):
-            #Check that the guy was playing for Man Utd in this match (For cases like Mr Alexis)
-            playerTeam =  match[j].select('td[class="no-border-links "]')[0]
-            if playerTeam.find('a').get_text() == team:
-                if len(match[j].find_all('td')) == 17:
-                    #Match Data array length of 17 indicates Player was in the matchday squad
+        #####Screws up here due to Axel Tuanzebe not having any champs league/PL in 2018/19 data?? 13/5/2020
+        if comp_index == 100: # Player was not registered for that season (e.g. been on loan)
+            minData = [minutes, subIn, subOut] # Zero arrays for that player returned 
+            
+        else:
+            
+            results_comp = pageSoup.find_all(class_="responsive-table")[comp_index+1]
+            #print (results_comp)
+            #match = results_comp.find_all('tr',class_='','bg_rot_20','bg_gelb_20')
+            
+            #This re.compile method magically works somehow
+            match = results_comp.find_all("tr", { "class" : re.compile(r"^(|bg_rot_20|bg_gelb_20)$") })
+         
+            for j in range(0, len(match)):
+                #Check that the guy was playing for Man Utd in this match (For cases like Mr Alexis)
+                #print (match[j].select('td[class="no-border-links"]'))
+                playerTeam =  match[j].select('td[class="no-border-links"]')[0]
+                
+                # For playerTeam above, for some reason for Bundesliga it fetches many e.g. 'Bayern Munich' 
+                # strings hence it will never match with the 'team' arg and for loop ends here for each player 
+                
+                '''
+                Remove the [:-1] if not for German teams...web bug? 
+                '''
+                if playerTeam.find('a').get_text() == team:
+                    #print (True)
                     
-                    #Proper matching of matchdays to array by date
-                    gamedate = match[j].find_all('td')[1].get_text(strip=True)
-                    gameID = gN.index(gamedate)
-                    
-                    minutes[j] = int(match[j].find_all('td')[16].get_text().replace("'",""))  
-                    #Check if theres any substitution data for the player
-                    a = match[j].find_all('td')[14].get_text(strip=True)
-                    if a != "":
-                        subIn[j] = int(a.replace("'",""))
-                    #Likewise for sub-out data    
-                    b = match[j].find_all('td')[15].get_text(strip=True)
-                    if b != "":
-                        subOut[j] = int(b.replace("'",""))
-                    #Also check if the player got a red card and we can take this as a sub out 
-                    c = match[j].find_all('td')[13].get_text(strip=True)
-                    if c != "":
-                        subOut[j] = int(c.replace("'",""))
-        minData = [minutes, subIn, subOut]     
+                    if len(match[j].find_all('td')) == 17:
+                        
+                        #Match Data array length of 17 indicates Player was in the matchday squad
+                        
+                        #Proper matching of matchdays to array by date
+                        gamedate = match[j].find_all('td')[1].get_text(strip=True)
+                
+                        gameID = gN.index(gamedate)
+                        
+                        minutes[gameID] = int(match[j].find_all('td')[-1].get_text().replace("'",""))  
+                        #Check if theres any substitution data for the player
+                        a = match[j].find_all('td')[14].get_text(strip=True)
+                        if a != "":
+                            subIn[gameID] = int(a.replace("'",""))
+                        #Likewise for sub-out data    
+                        b = match[j].find_all('td')[15].get_text(strip=True)
+                        if b != "":
+                            subOut[gameID] = int(b.replace("'",""))
+                        #Also check if the player got a red card and we can take this as a sub out 
+                        c = match[j].find_all('td')[13].get_text(strip=True)
+                        if c != "":
+                            subOut[gameID] = int(c.replace("'",""))
+            minData = [minutes, subIn, subOut]
+            #print (pName, minData)
         
     
     elif comp == "all": 
@@ -146,15 +188,15 @@ def scrapePlayer(pName, link, comp, team, ms, sI, sO, compNames, gN):
                             
                             #Match Data array length of 17 indicates Player was in the matchday squad
                             
-                            ## Cmon Scholesly mate
-                            if match[j].find_all('td')[16].get_text() == "" and pName == "Paul Scholes" :
+                            ## Cmon Scholesly mate..website bugs for their 98/99 data
+                            if match[j].find_all('td')[-1].get_text() == "" and pName == "Paul Scholes" :
                                 minutes[team_index][gameID] = 8
-                            elif match[j].find_all('td')[16].get_text() == "" and pName == "Ole Gunnar Solskjaer" :
+                            elif match[j].find_all('td')[-1].get_text() == "" and pName == "Ole Gunnar Solskjaer" :
                                 minutes[team_index][gameID] = 22
                                 
                             else:
                                 
-                                minutes[team_index][gameID] = int(match[j].find_all('td')[16].get_text().replace("'",""))  
+                                minutes[team_index][gameID] = int(match[j].find_all('td')[-1].get_text().replace("'",""))  
                             
                             #Check if theres any substitution data for the player
                             a = match[j].find_all('td')[14].get_text(strip=True)
@@ -178,8 +220,8 @@ def scrapePlayer(pName, link, comp, team, ms, sI, sO, compNames, gN):
                             
         minData = [minutes, subIn, subOut]     
         
-        
-        return minData               
+    #print (minutes)    
+    return minData               
     #allData = pd.DataFrame({"Matchday": matchday, "Minutes Played": minutes, "Sub-In": subIn, "Sub-Out": subOut})    
     #allData.to_csv(pName+'.csv', encoding='utf-8', index=False)            
 
@@ -190,8 +232,10 @@ def scrapeTeam(comp, team, teamNum, seas):
     but should in the future take the team name or code (for e.g. Man Utd has a code 985) that will 
     direct the scraper to the correct webpage. 
     '''
-    teamData = []
-    playerNames = []
+    teamData = [] # Minutes/Sub-in/Sub-out Data
+    playerNames = [] # Names
+    playerPos = [] # Positions
+    playerSpos = [] # Sub-positions
     #Default team is Man Utd for now 
     #Variables are the club name "Man Utd" and the id "985" for instance 
     # Note that only the team number controls the page, i.e. manchester-united and 131 directs to the FC Barca page anyway 
@@ -201,6 +245,14 @@ def scrapeTeam(comp, team, teamNum, seas):
     
     players = teamPageSoup.find_all(class_="spielprofil_tooltip")[::2]
     
+    # Get info on player's positions (Defender, Forward)
+    regex = re.compile('.*zentriert rueckennummer.*')
+    player_pos = teamPageSoup.find_all("td", {"class" : regex})
+    
+    # Get info such as sub-position (CB, LB, CF)
+    player_subpos = teamPageSoup.find_all(class_="inline-table")
+    
+    
     #Get the team's match data from that season (how many matches were played in each competition etc.)
     teamPage0 = f"https://www.transfermarkt.co.uk/manchester-united/spielplan/verein/{teamNum}/saison_id/{seas}"
     teamPageTree0 = requests.get(teamPage0, headers=headers)
@@ -208,6 +260,7 @@ def scrapeTeam(comp, team, teamNum, seas):
     
     #Find all comps the team participated in that year 
     allcomps = teamPageSoup0.find_all(class_="table-header")[1:-1]
+    #print(allcomps)
     compNames = [] #Store the names of those competitions, so that when scraping a player's data, only the relevant matches are taken 
                     # i.e. if i'm getting Zlatan's data for Man Utd, the LAG match data will be ignored 
     
@@ -228,7 +281,13 @@ def scrapeTeam(comp, team, teamNum, seas):
         
         gN = []
         for x in range(len(match)):
+                #print(match[x].find_all('td')[1].get_text(strip=True))
                 gamenum = match[x].find_all('td')[1].get_text(strip=True)[4:]
+                
+                # This EXTRA line here for Newcastle n Norwich because of wrong data on website
+                #if gamenum == 'Aug 16, 2019':
+                #    gamenum = 'Aug 17, 2019'
+                
                 gN.append(gamenum)
         ms = [0 for i in range(len(match))]
         sI = [0 for i in range(len(match))]
@@ -253,6 +312,11 @@ def scrapeTeam(comp, team, teamNum, seas):
             gamenames = []
             for x in range(len(match)):
                 gamenum = match[x].find_all('td')[1].get_text(strip=True)[4:]
+                
+                # This EXTRA line here for Newcastle n Norwich because of wrong data on website
+                #if gamenum == 'Aug 16, 2019':
+                #    gamenum = 'Aug 17, 2019'
+                
                 gamenames.append(gamenum)
                 
             
@@ -264,19 +328,24 @@ def scrapeTeam(comp, team, teamNum, seas):
             sI.append(sI_comp)
             sO.append(sO_comp)
             gN.append(gamenames)
-        #print (gN)
-            
-        
+        #print (gN)       
+    #print (players)
     #Get individual player data
     for x in players:
         pName = x.get_text()
-        playerNames.append(pName)
         print (pName)
+        playerNames.append(pName) #Names
+        pPos = player_pos[players.index(x)]['title']
+        playerPos.append(pPos)
+        pSpos = player_subpos[players.index(x)].find_all('td')[-1].get_text() #Sub-Positions
+        playerSpos.append(pSpos)
+        #print (pName)
         link = 'https://www.transfermarkt.co.uk'+x['href'].replace('profil','leistungsdaten')+f'/plus/1?saison={seas}'
+        #print (link)
         teamData.append(scrapePlayer(pName,link,comp,team, ms, sI, sO, compNames, gN))
     #Save the indiv player min per game data into npy file 
     np.save(f"{team}.npy", teamData)
-    return teamData, playerNames
+    return teamData, playerNames, playerPos, playerSpos
     
     
 #%%
@@ -289,7 +358,7 @@ def minutesSheet(title, comp, team, teamNum, seas):
     '''
     global playerNames
     global teamData
-    teamData, playerNames = scrapeTeam(comp, team, teamNum, seas)
+    teamData, playerNames, playerPos, playerSpos = scrapeTeam(comp, team, teamNum, seas)
     allData = []    
     
     
@@ -301,7 +370,7 @@ def minutesSheet(title, comp, team, teamNum, seas):
             indices.append(i)
             
     for j in sorted(indices, reverse = True):
-        del teamData[j], playerNames[j]        
+        del teamData[j], playerNames[j], playerPos[j], playerSpos[j]         
             
         
     for x in teamData: #Loop through squad 
@@ -366,7 +435,15 @@ def minutesSheet(title, comp, team, teamNum, seas):
         
     df =pd.DataFrame(allData,columns=playerNames)
     df.insert(loc=0, column='Shared Minutes', value=playerNames) #For neatness sake when viewing csv file
-    df.to_csv(f'{title}.csv', encoding='utf-8', index = False)  
+    df.to_csv(f'{title}.csv', encoding='utf-8', index = False)
+    
+    # Tests
+    print (team)
+    #print (playerPos)
+    #print (playerSpos)
+    
+    df1 = pd.DataFrame({'Name':playerNames, 'Position':playerPos,'Sub-position':playerSpos})
+    df1.to_csv(f'{title}_positions.csv', encoding='utf-8', index = False)
 
 #%% Network Plotting        
 
@@ -404,3 +481,31 @@ with open('graph.json', 'w') as f:
 
 
 '''        
+#%%
+# Getting the Team Numbers from any League 
+
+def scrapeTeamNum(link):
+    '''
+    Scraping function for EPL teams' player's minutes per-game. Current function doesn't take any arg
+    but should in the future take the team name or code (for e.g. Man Utd has a code 985) that will 
+    direct the scraper to the correct webpage. 
+    '''
+    #Default team is Man Utd for now 
+    #Variables are the club name "Man Utd" and the id "985" for instance 
+    # Note that only the team number controls the page, i.e. manchester-united and 131 directs to the FC Barca page anyway 
+    compPage = link
+    compPageTree = requests.get(compPage, headers=headers)
+    compPageSoup = BeautifulSoup(compPageTree.content, 'html.parser')
+    
+    teams = compPageSoup.find_all(class_="hauptlink no-border-links show-for-small show-for-pad")
+    
+    teamNames = [teams[x].find('a').get_text() for x in range(len(teams))]
+    teamNums = [teams[x].find('a')['id'] for x in range(len(teams))]
+    
+    return teamNames, teamNums
+
+
+teamNames, teamNums = scrapeTeamNum('https://www.transfermarkt.co.uk/premier-league/startseite/wettbewerb/GB1/plus/?saison_id=2009')
+for team,ids in zip(teamNames[14:15], teamNums[14:15]):
+    minutesSheet("Output/"+team+"_0910", "Premier League", team, ids, '2009')
+  
